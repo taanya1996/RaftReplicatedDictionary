@@ -14,7 +14,10 @@ import random
 BUFF_SIZE = 20480
 C2C_CONNECTIONS = {}
 CLIENT_STATE = None
+state_machine =None
 MessageQueue = []
+port_mapping={}
+
 #persistCounter = 0
 
 def sleep():
@@ -90,77 +93,80 @@ class StateMachine(Thread):
     
     def run(self):
         while(True):
-            if(self.lastCommitIndex < CLIENT_STATE.commit_index):
-                log_entry = CLIENT_STATE.logs[self.lastCommitIndex+1]
-                # if(log_entry.msg == None):
-                #     print("CommittedIndex:", self.commitIndex)
-                #     self.commitIndex+=1
-                #     continue
-                operation_info = log_entry.msg
-                #print(operation_info)
-                
-                if(operation_info.operation_type == "CREATE_DICT"):
-                    print("Create Operation Executing")
-                    client_ids = operation_info.client_ids
-                    dict_public_key = operation_info.public_key
-                    dict_id = operation_info.dict_id
+            try:
+                if(self.lastCommitIndex < CLIENT_STATE.commit_index):
+                    log_entry = CLIENT_STATE.logs[self.lastCommitIndex+1]
+                    # if(log_entry.msg == None):
+                    #     print("CommittedIndex:", self.commitIndex)
+                    #     self.commitIndex+=1
+                    #     continue
+                    operation_info = log_entry.msg
+                    #print(operation_info)
                     
-                    try:
-                        dict_private_key = decryptPvtKey(operation_info.enc_private_keys[CLIENT_STATE.pid], CLIENT_STATE.private_key)
-                    except:
-                        print("CREATE_DICT: Decryption of private Key failed, I don't own this Dictionary.")
-                    
-                    if CLIENT_STATE.pid in client_ids:
-                        dict_private_key = decryptPvtKey(operation_info.enc_private_keys[CLIENT_STATE.pid], CLIENT_STATE.private_key)
-                        dictionary = Dictionary(dict_id, client_ids)
-                        dictionary.public_key= dict_public_key
-                        dictionary.private_key = dict_private_key
-                        Dictionaries[dict_id]=dictionary
-                        print("Dictionary after creation", Dictionaries[dict_id].dict)
-                    
-                    #Savingthe public_keys for the dictionary
-                    DictionaryDetails[dict_id]=dict_public_key
-            
-                else:
-                    #need to decrypt and check the operation
-                    dict_id = operation_info.dict_id
-                    if dict_id in Dictionaries:
-                        print("This is the Dictionary that I own, decrypting the operations and necessary keys")
-                        operation_type = decrypt_content(operation_info.operation_type, Dictionaries[dict_id].private_key)
-                        if(operation_type == "PUT"):
-                            print("Put operation executing| dictId: ", dict_id, type(dict_id))
-                            
-                            decrypt_key = decrypt_content(operation_info.key, Dictionaries[dict_id].private_key)
-                            decrypt_val = decrypt_content(operation_info.val, Dictionaries[dict_id].private_key)
-                            dictionary = Dictionaries[dict_id]
-                            dictionary.addKeyValPair(decrypt_key,decrypt_val)
-                            print(Dictionaries)
-                            
-                        elif(operation_type == "GET"):
-                            print("Put operation executing| dictId: ", dict_id, type(dict_id))
-                            decrypt_key = decrypt_content(operation_info.key, Dictionaries[dict_id].private_key)
-                            dictionary = Dictionaries[dict_id]
-                            print(dictionary.getKeyValPair(decrypt_key))
-                            print(Dictionaries)
-                    
-                '''    
-                elif(operation_info.operation_type == "PUT"):
-                    dict_id = operation_info.dict_id
-                    print("Put operation executing| dictId: ", dict_id, type(dict_id))
-                    print(Dictionaries)
-                    if(dict_id in Dictionaries):
-                        dictionary = Dictionaries[dict_id]
-                        dictionary.addKeyValPair(operation_info.key,operation_info.val)
-                
-                elif(operation_info.operation_type == "GET"):
-                    dict_id = operation_info.dict_id
-                    if(dict_id in Dictionaries):
-                        dictionary = Dictionaries[dict_id]
-                        print(dictionary.getKeyValPair(operation_info.key))
-                '''
-                print("Executed Index:", self.lastCommitIndex)
-                self.lastCommitIndex+=1
+                    if(operation_info.operation_type == "CREATE_DICT"):
+                        print("Create Operation Executing")
+                        client_ids = operation_info.client_ids
+                        dict_public_key = operation_info.public_key
+                        dict_id = operation_info.dict_id
                         
+                        try:
+                            dict_private_key = decryptPvtKey(operation_info.enc_private_keys[CLIENT_STATE.pid], CLIENT_STATE.private_key)
+                        except:
+                            print("CREATE_DICT: Decryption of private Key failed, I don't own this Dictionary.")
+                        
+                        if CLIENT_STATE.pid in client_ids:
+                            dict_private_key = decryptPvtKey(operation_info.enc_private_keys[CLIENT_STATE.pid], CLIENT_STATE.private_key)
+                            dictionary = Dictionary(dict_id, client_ids)
+                            dictionary.public_key= dict_public_key
+                            dictionary.private_key = dict_private_key
+                            Dictionaries[dict_id]=dictionary
+                            print("Dictionary after creation", Dictionaries[dict_id].dict)
+                        
+                        #Savingthe public_keys for the dictionary
+                        DictionaryDetails[dict_id]=dict_public_key
+                
+                    else:
+                        #need to decrypt and check the operation
+                        dict_id = operation_info.dict_id
+                        if dict_id in Dictionaries:
+                            print("This is the Dictionary that I own, decrypting the operations and necessary keys")
+                            operation_type = decrypt_content(operation_info.operation_type, Dictionaries[dict_id].private_key)
+                            if(operation_type == "PUT"):
+                                print("Put operation executing| dictId: ", dict_id, type(dict_id))
+                                
+                                decrypt_key = decrypt_content(operation_info.key, Dictionaries[dict_id].private_key)
+                                decrypt_val = decrypt_content(operation_info.val, Dictionaries[dict_id].private_key)
+                                dictionary = Dictionaries[dict_id]
+                                dictionary.addKeyValPair(decrypt_key,decrypt_val)
+                                print(Dictionaries)
+                                
+                            elif(operation_type == "GET"):
+                                print("Put operation executing| dictId: ", dict_id, type(dict_id))
+                                decrypt_key = decrypt_content(operation_info.key, Dictionaries[dict_id].private_key)
+                                dictionary = Dictionaries[dict_id]
+                                print(dictionary.getKeyValPair(decrypt_key))
+                                print(Dictionaries)
+                        
+                    '''    
+                    elif(operation_info.operation_type == "PUT"):
+                        dict_id = operation_info.dict_id
+                        print("Put operation executing| dictId: ", dict_id, type(dict_id))
+                        print(Dictionaries)
+                        if(dict_id in Dictionaries):
+                            dictionary = Dictionaries[dict_id]
+                            dictionary.addKeyValPair(operation_info.key,operation_info.val)
+                    
+                    elif(operation_info.operation_type == "GET"):
+                        dict_id = operation_info.dict_id
+                        if(dict_id in Dictionaries):
+                            dictionary = Dictionaries[dict_id]
+                            print(dictionary.getKeyValPair(operation_info.key))
+                    '''
+                    print("Executed Index:", self.lastCommitIndex)
+                    self.lastCommitIndex+=1
+            
+            except:
+                pass           
 
 class Server(Thread):
     def __init__(self):
@@ -303,7 +309,7 @@ class Server(Thread):
             else:
                 response = pickle.dumps(ResponseAppendEntry("RESP_APPEND_ENTRY", CLIENT_STATE.pid, CLIENT_STATE.curr_term, False))
                 sleep()
-                C2C_CONNECTIONS[CLIENT_STATE.port_mapping[data.leaderId]].send*response
+                C2C_CONNECTIONS[CLIENT_STATE.port_mapping[data.leaderId]].send(response)
                 
     def AppendEntry_Handler_Follower(self, data):
         if data.term < CLIENT_STATE.curr_term:
@@ -375,12 +381,12 @@ class Server(Thread):
             else:
                 CLIENT_STATE.next_index[data.pid] -=1
                 entries = CLIENT_STATE.logs[CLIENT_STATE.next_index[data.pid]:]
-                AppendEntry = AppendEntry("APPEND_ENTRY", CLIENT_STATE.curr_term, CLIENT_STATE.pid, CLIENT_STATE.logs[CLIENT_STATE.next_index[data.pid]-1].index, \
+                append_entry = AppendEntry("APPEND_ENTRY", CLIENT_STATE.curr_term, CLIENT_STATE.pid, CLIENT_STATE.logs[CLIENT_STATE.next_index[data.pid]-1].index, \
                     CLIENT_STATE.logs[CLIENT_STATE.next_index[data.pid]-1].term, entries, CLIENT_STATE.commit_index)
                 
                 sleep()
                 
-                C2C_CONNECTIONS[CLIENT_STATE.port_mapping[data.pid]].send(pickle.dumps(AppendEntry))
+                C2C_CONNECTIONS[CLIENT_STATE.port_mapping[data.pid]].send(pickle.dumps(append_entry))
                 
     def ResponseVoteHandler_Candidate(self, data):
         if data.term > CLIENT_STATE.curr_term:
@@ -395,6 +401,7 @@ class Server(Thread):
                 if key not in CLIENT_STATE.votes:
                     CLIENT_STATE.votes[key]=0
                 CLIENT_STATE.votes[key]+=1
+                print("Total votes received: ",  CLIENT_STATE.votes[key])
                 if CLIENT_STATE.votes[key] >=3:
                     print("MAJORITY VOTES RECEIVED. BECAME LEADER") 
                     CLIENT_STATE.curr_state = "LEADER"
@@ -447,16 +454,19 @@ class HeartBeat(Thread):
         append_entry = AppendEntry("APPEND_ENTRY", CLIENT_STATE.curr_term, CLIENT_STATE.pid, CLIENT_STATE.logs[-1].index, CLIENT_STATE.logs[-1].term, entry, \
             CLIENT_STATE.commit_index)
         
-        while CLIENT_STATE.curr_state == "LEADER":
-            if time.time() - CLIENT_STATE.leader_heart_beat > self.timeout:
-                CLIENT_STATE.leader_heart_beat = time.time()
-                append_entry.prevLogIndex = CLIENT_STATE.logs[-1].index
-                append_entry.prevLogTerm = CLIENT_STATE.logs[-1].term
-                append_entry.commitIndex = CLIENT_STATE.commit_index
-                print("SENDING HEARTBEAT")
-                for client in CLIENT_STATE.port_mapping:
-                    if CLIENT_STATE.active_link[client] == True:
-                        C2C_CONNECTIONS[CLIENT_STATE.port_mapping[client]].send(pickle.dumps(append_entry))
+        try:
+            while CLIENT_STATE.curr_state == "LEADER":
+                if time.time() - CLIENT_STATE.leader_heart_beat > self.timeout:
+                    CLIENT_STATE.leader_heart_beat = time.time()
+                    append_entry.prevLogIndex = CLIENT_STATE.logs[-1].index
+                    append_entry.prevLogTerm = CLIENT_STATE.logs[-1].term
+                    append_entry.commitIndex = CLIENT_STATE.commit_index
+                    print("SENDING HEARTBEAT")
+                    for client in CLIENT_STATE.port_mapping:
+                        if CLIENT_STATE.active_link[client] == True:
+                            C2C_CONNECTIONS[CLIENT_STATE.port_mapping[client]].send(pickle.dumps(append_entry))
+        except:
+            pass
                                  
 
 class Timer(Thread):
@@ -466,13 +476,18 @@ class Timer(Thread):
         
     def run(self):
         while(True):
-            if time.time() - CLIENT_STATE.last_recv_time > self.timeout and CLIENT_STATE.curr_state != "LEADER":
-                CLIENT_STATE.last_recv_time = time.time()
-                print("Starting Leader Election")
-                self.start_election()
-                self.timeout = random.randint(25, 50)
-                #New timeout set
-                print("NEW TIMEOUT = " + str(self.timeout))
+            try:
+                
+                if time.time() - CLIENT_STATE.last_recv_time > self.timeout and CLIENT_STATE.curr_state != "LEADER":
+                    CLIENT_STATE.last_recv_time = time.time()
+                    print("Starting Leader Election")
+                    self.start_election()
+                    self.timeout = random.randint(25, 50)
+                    #New timeout set
+                    print("NEW TIMEOUT = " + str(self.timeout))
+                    
+            except:
+                pass
                 
                 
     def start_election(self):
@@ -480,7 +495,7 @@ class Timer(Thread):
         CLIENT_STATE.curr_leader = CLIENT_STATE.pid
         CLIENT_STATE.curr_term = CLIENT_STATE.curr_term+1
         CLIENT_STATE.voted_for = CLIENT_STATE.pid
-        CLIENT_STATE.votes[str(CLIENT_STATE.pid) + "|" + str(CLIENT_STATE.curr_leader)]=1
+        CLIENT_STATE.votes[str(CLIENT_STATE.pid) + "|" + str(CLIENT_STATE.curr_term)]=1
         
         for client in CLIENT_STATE.port_mapping:
             if CLIENT_STATE.active_link[client] == True:
@@ -553,12 +568,19 @@ class Persistant_logs(Thread):
         
     def run(self):
         while(True):
-            if time.time() - self.curr_time > self.timeout:
-                print("SAVING STATE ....")
-                file = open(CLIENT_STATE.file_path, "wb+")
-                file.write(pickle.dumps(CLIENT_STATE))
-                file.close()
-                self.curr_time=time.time()
+            try: 
+                if time.time() - self.curr_time > self.timeout:
+                    file = open(CLIENT_STATE.file_path, "wb+")
+                    print("SAVING STATE ....")
+                    print("Port Mappings", CLIENT_STATE.port_mapping)
+                    pickle.dump(CLIENT_STATE, file, pickle.HIGHEST_PROTOCOL )
+                    #CLIENT_STATE_TEMP= pickle.load(file)
+                    #print("Port Mapping in Retrieval", CLIENT_STATE_TEMP.port_mapping)
+                    file.close()
+                    self.curr_time=time.time()
+            except Exception as e:
+                print(e)
+                
 
 
 class Client:
@@ -666,6 +688,7 @@ class Client:
         global CLIENT_STATE
         #global persistCounter
         global Dictionaries
+        global state_machine
         
         while(True):
             
@@ -688,6 +711,7 @@ class Client:
             print("6. failLink <dest>")
             print("7. fixLink <dest>")
             print("8. failProcess")
+            print("9. fixProcess")
             user_input = input()
             
             #need to handle encryption-decryption
@@ -767,9 +791,9 @@ class Client:
                 print("LINK FAILURE BETWEEN " + str(CLIENT_STATE.pid) + "AND " + dest)
                 dest = int(dest)
                 
-                #NetworkLinkDest = NetworkLink("FAIL_LINK", CLIENT_STATE.pid)
+                NetworkLinkDest = NetworkLink("FAIL_LINK", CLIENT_STATE.pid)
                 #print(CLIENT_STATE.port_mapping)
-                #C2C_CONNECTIONS[CLIENT_STATE.port_mapping[dest]].send(pickle.dumps(NetworkLinkDest))
+                C2C_CONNECTIONS[CLIENT_STATE.port_mapping[dest]].send(pickle.dumps(NetworkLinkDest))
                                                             
                 CLIENT_STATE.active_link[dest] = False
                 
@@ -780,12 +804,50 @@ class Client:
                 print("FIX LINK BETWEEN " + str(CLIENT_STATE.pid) + str(dest))
                 CLIENT_STATE.active_link[dest] = True
                 
-                #NetworkLinkDest = NetworkLink("FIX_LINK", CLIENT_STATE.pid)
-                #C2C_CONNECTIONS[CLIENT_STATE.port_mapping[dest]].send(pickle.dumps(NetworkLinkDest))
+                NetworkLinkDest = NetworkLink("FIX_LINK", CLIENT_STATE.pid)
+                C2C_CONNECTIONS[CLIENT_STATE.port_mapping[dest]].send(pickle.dumps(NetworkLinkDest))
             
+            #TODO recheck
             elif user_input.startswith("failProcess"):
-                print("Not implemented")
-                pass
+                
+                Dictionaries = {}
+                DictionaryDetails ={}
+                
+                for dest in CLIENT_STATE.port_mapping:
+                    NetworkLinkDest = NetworkLink("FAIL_LINK", CLIENT_STATE.pid)
+                    C2C_CONNECTIONS[CLIENT_STATE.port_mapping[dest]].send(pickle.dumps(NetworkLinkDest))
+                    
+                CLIENT_STATE.active_link = {1: False, 2:False, 3:False, 4:False, 5:False}
+                CLIENT_STATE.logs=[LogEntry(0,0,None)]
+                
+                print("Deleting the state machine and the Client State")
+                del state_machine
+                MessageQueue=[]
+                print(CLIENT_STATE.port_mapping)
+                del CLIENT_STATE
+                
+            #TODO recheck
+            elif user_input.startswith("fixProcess"):
+                if os.path.exists(self.file_path):
+                    with open(self.file_path, "rb") as f:
+                        if(os.stat(self.file_path).st_size!=0):
+                            print("LOADING SAVED STATE FROM LOGS")
+                            CLIENT_STATE= pickle.load(f) #what is the type of CLIENT_STATE here
+                            
+                            
+                            CLIENT_STATE.last_recv_time = time.time()
+                            CLIENT_STATE.active_link = {1: True, 2:True, 3:True, 4:True, 5:True}
+                            CLIENT_STATE.votes ={}
+                            for entry in CLIENT_STATE.logs:
+                                print(str(entry))
+                            f.close()
+                print(CLIENT_STATE.port_mapping)
+                for dest in CLIENT_STATE.port_mapping:
+                    NetworkLinkDest = NetworkLink("FIX_LINK", CLIENT_STATE.pid)
+                    C2C_CONNECTIONS[CLIENT_STATE.port_mapping[dest]].send(pickle.dumps(NetworkLinkDest))
+                    state_machine = StateMachine()
+                    state_machine.start()
+                
             else:
                 print ("Invalid Input")
             
@@ -839,28 +901,28 @@ if __name__=="__main__":
     elif sys.argv[1] == "p2":
         listen_port = 7002
         pid=2
-        file_path = os.path.join(os.getcwd(),'log/c1.txt')
+        file_path = os.path.join(os.getcwd(),'log/c2.txt')
         port_mapping = {1:7012, 3:7023, 4:7024, 5:7025}
         timer = Timer(35)
 
     elif sys.argv[1] == "p3":
         listen_port = 7003
         pid=3
-        file_path = os.path.join(os.getcwd(),'log/c1.txt')
+        file_path = os.path.join(os.getcwd(),'log/c3.txt')
         port_mapping = {1:7013, 2:7023, 4:7034, 5:7035}
         timer = Timer(40)
 
     elif sys.argv[1] == "p4":
         listen_port = 7004
         pid=4
-        file_path = os.path.join(os.getcwd(),'log/c1.txt')
+        file_path = os.path.join(os.getcwd(),'log/c4.txt')
         port_mapping = {1:7014, 2:7024, 3:7034, 5:7045}
         timer = Timer(45)
     
     elif sys.argv[1] == "p5":
         listen_port = 7005
         pid=5
-        file_path = os.path.join(os.getcwd(),'log/c1.txt')
+        file_path = os.path.join(os.getcwd(),'log/c5.txt')
         port_mapping = {1:7015, 2:7025, 3:7035, 4:7045}
         timer = Timer(50)
 
@@ -870,6 +932,7 @@ if __name__=="__main__":
     CLIENT_STATE = ClientState(pid, port_mapping, file_path)
     timer.start()
     
+
     state_machine = StateMachine()
     state_machine.start()
 

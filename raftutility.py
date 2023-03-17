@@ -43,7 +43,7 @@ class ResponseAppendEntry:
 class ClientState:
     def __init__(self, pid, port_mapping, file_path):
         self.pid = pid
-        self. port_mapping = port_mapping
+        self.port_mapping = port_mapping
         self.file_path = file_path
         self.curr_leader = 0
         self.curr_term = 0
