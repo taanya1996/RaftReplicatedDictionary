@@ -7,7 +7,7 @@ class LogEntry:
         self.msg = msg
 
     def __str__(self):
-        return str(self.term) + '|' | str(self.index) + '|' + str(self.msg)
+        return str(self.term) + '|' + str(self.index) + '|' + str(self.msg)
 
 class ReqVote:
     def __init__(self,req_type, candId, term, lastLogIndex, lastLogTerm):
@@ -27,7 +27,7 @@ class AppendEntry:
     def __init__(self, req_type, term, leaderId, prevLogIndex, prevLogTerm, entries, commitIndex):
         self.req_type = req_type
         self.term = term
-        self. leaderId = leaderId
+        self.leaderId = leaderId
         self.prevLogIndex = prevLogIndex
         self.prevLogTerm = prevLogTerm
         self.entries = entries
@@ -38,7 +38,7 @@ class ResponseAppendEntry:
         self.req_type = req_type
         self.term = term
         self.pid = pid
-        self.succeess = success
+        self.success = success
 
 class ClientState:
     def __init__(self, pid, port_mapping, file_path):
@@ -66,25 +66,25 @@ class ClientMessage:
         self.msg = msg
 
 class ClientRequest:
-    def __init__(self, req_type, message_type, sender, group_id, enc_message, enc_private_keys, public_key):
+    def __init__(self, req_type, operation_type, dict_id, client_ids, key=None, val=None, enc_message=None, enc_private_keys=None, public_key=None):
         self.req_type = req_type
-        self.message_type = message_type
-        self.sender = sender
-        self.group_id = group_id
+        self.operation_type = operation_type
+        self.dict_id = dict_id
+        self.client_ids = client_ids
+        self.key = key
+        self.val = val
         self.enc_message = enc_message
         self.enc_private_keys = enc_private_keys
         self.public_key = public_key
 
     def __str__(self):
-        if(self.message_type == "WRITE_MESSAGE"):
-            return self.message_type + '|' + str(self.group_id) + '| Encrypted Message'
-        return self.message_type + '|' + str(self.group_id) + '|' + str(len(self.enc_private_keys))
+        return self.operation_type + "|" + self.dict_id + "|" + str(self.client_ids) + "|" + str(self.key) + "|" + str(self.val)
 
 
 class NetworkLink:
-    def __init__(self, req_type, src, dest):
+    def __init__(self, req_type, dest):
         self.req_type = req_type
-        self.src = src
+        #self.src = src
         self.dest = dest
 
 
