@@ -20,12 +20,41 @@ persistCounter = 0
 def sleep():
     time.sleep(3)
 
+def encryptPvtKey(private_key, public_key):
+        encKey = []
+        encKey.append(rsa.encrypt(str(private_key.n).encode(), public_key))
+        encKey.append(rsa.encrypt(str(private_key.e).encode(), public_key))
+        encKey.append(rsa.encrypt(str(private_key.d).encode(), public_key))
+        encKey.append(rsa.encrypt(str(private_key.p).encode(), public_key))
+        encKey.append(rsa.encrypt(str(private_key.q).encode(), public_key))
+        return encKey
+
+def decryptPvtKey(enc_key, my_key):
+    pvtKey = enc_key 
+    n = int(rsa.decrypt(enc_key[0], my_key).decode())
+    e = int(rsa.decrypt(enc_key[1], my_key).decode())
+    d = int(rsa.decrypt(enc_key[2], my_key).decode())
+    p = int(rsa.decrypt(enc_key[3], my_key).decode())
+    q = int(rsa.decrypt(enc_key[4], my_key).decode())
+    privateKey = rsa.PrivateKey(n, e, d, p, q)
+    return privateKey
+
+def encrypt_content(content, public_key):
+    enc_cont = rsa.encrypt(content.encode(),public_key)
+    return enc_cont
+
+def decrypt_content(enc_content, private_key):
+    dec_cont = rsa.decrypt(enc_content, private_key).decode()
+    return dec_cont
+    
 
 class Dictionary:
-    def __init__(self, id, clientIds=None):
+    def __init__(self, id, clientIds=None, public_key=None, private_key=None):
         self.id= id
         self.clientIds = clientIds
         self.dict={}
+        self.public_key = public_key
+        self.private_key = private_key
         
     def addKeyValPair(self, key, val):
         print(key)
@@ -52,6 +81,7 @@ class Dictionary:
         
         
 Dictionaries={}
+DictionaryDetails={}
 
 class StateMachine(Thread):
     def __init__(self):
@@ -67,17 +97,47 @@ class StateMachine(Thread):
                 #     self.commitIndex+=1
                 #     continue
                 operation_info = log_entry.msg
-                print(operation_info)
+                #print(operation_info)
                 
                 if(operation_info.operation_type == "CREATE_DICT"):
                     print("Create Operation Executing")
                     client_ids = operation_info.client_ids
+                    dict_public_key = operation_info.public_key
+                    dict_id = operation_info.dict_id
+                    
                     if CLIENT_STATE.pid in client_ids:
-                        dict_id = operation_info.dict_id
+                        dict_private_key = decryptPvtKey(operation_info.enc_private_keys[CLIENT_STATE.pid], CLIENT_STATE.private_key)
                         dictionary = Dictionary(dict_id, client_ids)
+                        dictionary.public_key= dict_public_key
+                        dictionary.private_key = dict_private_key
                         Dictionaries[dict_id]=dictionary
                         print("Dictionary after creation", Dictionaries[dict_id].dict)
-                
+                    
+                    #Savingthe public_keys for the dictionary
+                    DictionaryDetails[dict_id]=dict_public_key
+
+                else:
+                    #need to decrypt and check the operation
+                    dict_id = operation_info.dict_id
+                    if dict_id in Dictionaries:
+                        operation_type = decrypt_content(operation_info.operation_type, Dictionaries[dict_id].private_key)
+                        if(operation_type == "PUT"):
+                            print("Put operation executing| dictId: ", dict_id, type(dict_id))
+                            
+                            decrypt_key = decrypt_content(operation_info.key, Dictionaries[dict_id].private_key)
+                            decrypt_val = decrypt_content(operation_info.val, Dictionaries[dict_id].private_key)
+                            dictionary = Dictionaries[dict_id]
+                            dictionary.addKeyValPair(decrypt_key,decrypt_val)
+                            print(Dictionaries)
+                            
+                        elif(operation_type == "GET"):
+                            print("Put operation executing| dictId: ", dict_id, type(dict_id))
+                            decrypt_key = decrypt_content(operation_info.key, Dictionaries[dict_id].private_key)
+                            dictionary = Dictionaries[dict_id]
+                            print(dictionary.getKeyValPair(decrypt_key))
+                            print(Dictionaries)
+                    
+                '''    
                 elif(operation_info.operation_type == "PUT"):
                     dict_id = operation_info.dict_id
                     print("Put operation executing| dictId: ", dict_id, type(dict_id))
@@ -91,6 +151,7 @@ class StateMachine(Thread):
                     if(dict_id in Dictionaries):
                         dictionary = Dictionaries[dict_id]
                         print(dictionary.getKeyValPair(operation_info.key))
+                '''
                 print("Executed Index:", self.lastCommitIndex)
                 self.lastCommitIndex+=1
                         
@@ -363,10 +424,11 @@ class Server(Thread):
             if CLIENT_STATE.active_link[client] == True:
                 print("New Log entry for index|term " + str(newEntry.index) + "|" + str(CLIENT_STATE.curr_term) + " sent to " + str(client))
                 C2C_CONNECTIONS[CLIENT_STATE.port_mapping[client]].send(pickle.dumps(append_entry))
-                
+        
+        '''     
         for entry in CLIENT_STATE.logs:
             print(str(entry))
-        
+        '''
         
 
 class HeartBeat(Thread):
@@ -488,7 +550,7 @@ class Persistant_logs(Thread):
             if time.time() - self.curr_time > self.timeout:
                 print("SAVING STATE ....")
                 file = open(CLIENT_STATE.file_path, "wb+")
-                file.write(pickle.dumps(CLIENT_STATE))#why are we dumping the Client_state?
+                file.write(pickle.dumps(CLIENT_STATE))
                 file.close()
                 self.curr_time=time.time()
 
@@ -594,7 +656,6 @@ class Client:
         self.start_console()
         
     
-    
     def start_console(self):
         global CLIENT_STATE
         global persistCounter
@@ -623,7 +684,7 @@ class Client:
             print("8. failProcess")
             user_input = input()
             
-            #need to handle encryptiom-decryption
+            #need to handle encryption-decryption
             if user_input.startswith("create"):
                 inp_arr= user_input.split()
                 client_ids=[]
@@ -634,7 +695,15 @@ class Client:
                 dictId= str(CLIENT_STATE.pid) + "|" + str(persistCounter)
                 print("DICTIONARY ID: ", dictId)
                 
-                client_request = ClientRequest("CLIENT_REQ","CREATE_DICT", dictId, client_ids)
+                public_key, private_key = rsa.newkeys(256)
+                enc_pvt_keys ={}
+                
+                for client in client_ids:
+                    enc_pvt_keys[int(client)] = encryptPvtKey(private_key, CLIENT_STATE.public_keys[int(client)])
+                
+                client_request = ClientRequest("CLIENT_REQ","CREATE_DICT", dictId, client_ids, key=None, val=None,enc_private_keys=enc_pvt_keys, public_key=public_key)
+                #print("ClientRequest")
+                #print(client_request)
                 self.broadcast(client_request)
                 
                 
@@ -642,14 +711,29 @@ class Client:
             elif user_input.startswith("put"):
                 #put dictionary 
                 op, dictId, key, val= user_input.split(" ",3)
-                client_request = ClientRequest("CLIENT_REQ", "PUT", dictId, client_ids=None, key=key, val=val)
+                dict_public_key = DictionaryDetails[dictId]
+                
+                enc_operation = encrypt_content("PUT", dict_public_key)
+                enc_key = encrypt_content(key, dict_public_key)
+                enc_val = encrypt_content(val, dict_public_key)
+                
+                client_request = ClientRequest("CLIENT_REQ", enc_operation, dictId, client_ids=None, key=enc_key, val=enc_val, enc_message=None, enc_private_keys=None, public_key=None)
+                #print("ClientRequest")
+                #print(client_request)
                 self.broadcast(client_request)
                 
                 
                 
             elif user_input.startswith("get"):
                 op, dictId, key = user_input.split(" ",2)
-                client_request = ClientRequest("CLIENT_REQ", "GET", dictId, client_ids=None, key=key)
+                dict_public_key = DictionaryDetails[dictId]
+                
+                enc_operation = encrypt_content("GET", dict_public_key)
+                enc_key = encrypt_content(key, dict_public_key)
+                
+                client_request = ClientRequest("CLIENT_REQ", enc_operation, dictId, client_ids=None, key=enc_key, val=None, enc_message=None, enc_private_keys=None, public_key=None)
+                #print("ClientRequest")
+                #print(client_request)
                 self.broadcast(client_request)
             
             
@@ -679,6 +763,7 @@ class Client:
                 dest = str(dest)
                 
                 NetworkLinkDest = NetworkLink("FAIL_LINK", CLIENT_STATE.pid)
+                print(CLIENT_STATE.port_mapping)
                 C2C_CONNECTIONS[CLIENT_STATE.port_mapping[dest]].send(pickle.dumps(NetworkLinkDest))
                                                             
                 CLIENT_STATE.active_link[dest] = False
@@ -726,6 +811,7 @@ class Client:
             MessageQueue.append(append_entry)
         
         else:
+            print("Client Request Received on Follower, moving to Leader")
             sleep()
             C2C_CONNECTIONS[CLIENT_STATE.port_mapping[CLIENT_STATE.curr_leader]].send(pickle.dumps(append_entry))
             
