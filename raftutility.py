@@ -59,6 +59,7 @@ class ClientState:
         self.log_entry_counts={}
         self.public_keys = {}
         self.private_key = None
+        self.persistCounter = 0
 
 class ClientMessage:
     def __init__(self, req_type, msg):
@@ -78,7 +79,7 @@ class ClientRequest:
         self.public_key = public_key
 
     def __str__(self):
-        return self.operation_type + "|" + self.dict_id + "|" + str(self.client_ids) + "|" + str(self.key) + "|" + str(self.val)
+        return self.operation_type + "|" + self.dict_id + "|" + str(self.client_ids) + "|" + str(self.key) + "|" + str(self.val) 
 
 
 class NetworkLink:

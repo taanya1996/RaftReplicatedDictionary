@@ -15,7 +15,7 @@ BUFF_SIZE = 20480
 C2C_CONNECTIONS = {}
 CLIENT_STATE = None
 MessageQueue = []
-persistCounter = 0
+#persistCounter = 0
 
 def sleep():
     time.sleep(3)
@@ -105,6 +105,11 @@ class StateMachine(Thread):
                     dict_public_key = operation_info.public_key
                     dict_id = operation_info.dict_id
                     
+                    try:
+                        dict_private_key = decryptPvtKey(operation_info.enc_private_keys[CLIENT_STATE.pid], CLIENT_STATE.private_key)
+                    except:
+                        print("CREATE_DICT: Decryption of private Key failed, I don't own this Dictionary.")
+                    
                     if CLIENT_STATE.pid in client_ids:
                         dict_private_key = decryptPvtKey(operation_info.enc_private_keys[CLIENT_STATE.pid], CLIENT_STATE.private_key)
                         dictionary = Dictionary(dict_id, client_ids)
@@ -115,11 +120,12 @@ class StateMachine(Thread):
                     
                     #Savingthe public_keys for the dictionary
                     DictionaryDetails[dict_id]=dict_public_key
-
+            
                 else:
                     #need to decrypt and check the operation
                     dict_id = operation_info.dict_id
                     if dict_id in Dictionaries:
+                        print("This is the Dictionary that I own, decrypting the operations and necessary keys")
                         operation_type = decrypt_content(operation_info.operation_type, Dictionaries[dict_id].private_key)
                         if(operation_type == "PUT"):
                             print("Put operation executing| dictId: ", dict_id, type(dict_id))
@@ -658,7 +664,7 @@ class Client:
     
     def start_console(self):
         global CLIENT_STATE
-        global persistCounter
+        #global persistCounter
         global Dictionaries
         
         while(True):
@@ -691,8 +697,8 @@ class Client:
                 for i in range(1,len(inp_arr)):
                     client_ids.append(int(inp_arr[i]))
                 
-                persistCounter+=1
-                dictId= str(CLIENT_STATE.pid) + "|" + str(persistCounter)
+                CLIENT_STATE.persistCounter+=1
+                dictId= str(CLIENT_STATE.pid) + "|" + str(CLIENT_STATE.persistCounter)
                 print("DICTIONARY ID: ", dictId)
                 
                 public_key, private_key = rsa.newkeys(256)
@@ -705,7 +711,6 @@ class Client:
                 #print("ClientRequest")
                 #print(client_request)
                 self.broadcast(client_request)
-                
                 
             
             elif user_input.startswith("put"):
@@ -760,22 +765,23 @@ class Client:
             elif user_input.startswith("failLink"):
                 op, dest = user_input.split(" ",1)
                 print("LINK FAILURE BETWEEN " + str(CLIENT_STATE.pid) + "AND " + dest)
-                dest = str(dest)
+                dest = int(dest)
                 
-                NetworkLinkDest = NetworkLink("FAIL_LINK", CLIENT_STATE.pid)
-                print(CLIENT_STATE.port_mapping)
-                C2C_CONNECTIONS[CLIENT_STATE.port_mapping[dest]].send(pickle.dumps(NetworkLinkDest))
+                #NetworkLinkDest = NetworkLink("FAIL_LINK", CLIENT_STATE.pid)
+                #print(CLIENT_STATE.port_mapping)
+                #C2C_CONNECTIONS[CLIENT_STATE.port_mapping[dest]].send(pickle.dumps(NetworkLinkDest))
                                                             
                 CLIENT_STATE.active_link[dest] = False
                 
             
             elif user_input.startswith("fixLink"):
                 op, dest = user_input.split(" ",1)
-                print("FIX LINK BETWEEN " + str(CLIENT_STATE.pid) + dest)
+                dest = int(dest)
+                print("FIX LINK BETWEEN " + str(CLIENT_STATE.pid) + str(dest))
                 CLIENT_STATE.active_link[dest] = True
                 
-                NetworkLinkDest = NetworkLink("FIX_LINK", CLIENT_STATE.pid)
-                C2C_CONNECTIONS[CLIENT_STATE.port_mapping[dest]].send(pickle.dumps(NetworkLinkDest))
+                #NetworkLinkDest = NetworkLink("FIX_LINK", CLIENT_STATE.pid)
+                #C2C_CONNECTIONS[CLIENT_STATE.port_mapping[dest]].send(pickle.dumps(NetworkLinkDest))
             
             elif user_input.startswith("failProcess"):
                 print("Not implemented")
