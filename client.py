@@ -9,6 +9,7 @@ import random
 from threading import Thread
 from raftutility import *
 import random
+import hashlib
 
 
 BUFF_SIZE = 20480
@@ -348,6 +349,7 @@ class Server(Thread):
                     if len(data.entries) > 0:
                         for entry in data.entries:
                             #hashing here
+                            
                             CLIENT_STATE.logs.append(entry)
                         # CLIENT_STATE.logs = CLIENT_STATE.logs[0:data.entries[-1].index+1]
                     response = pickle.dumps(ResponseAppendEntry("RESP_APPEND_ENTRY", CLIENT_STATE.pid, CLIENT_STATE.curr_term, True))
@@ -446,6 +448,13 @@ class Server(Thread):
             append_entry = AppendEntry("APPEND_ENTRY", CLIENT_STATE.curr_term, CLIENT_STATE.pid, CLIENT_STATE.logs[-1].index, CLIENT_STATE.logs[-1].term,\
                                                                                         entries, CLIENT_STATE.commit_index)
             #hashing here
+            '''
+            lastLogMsg = CLIENT_STATE.log(len(CLIENT_STATE.log)-1).msg
+            hashed_cont = hashlib.sha256(pickle.dumps(lastLogMsg)).digest()
+            new_entry = LogEntry(CLIENT_STATE.curr_term, len(CLIENT_STATE.logs), data, hashed_cont)
+            CLIENT_STATE.log.append(new_entry)
+            '''
+            
             CLIENT_STATE.logs.append(newEntry)
             
             CLIENT_STATE.leader_heart_beat = time.time()
@@ -469,12 +478,11 @@ class HeartBeat(Thread):
         Thread.__init__(self)
         self.timeout = timeout
         
-    def run(self):
-        entry = []
-        append_entry = AppendEntry("APPEND_ENTRY", CLIENT_STATE.curr_term, CLIENT_STATE.pid, CLIENT_STATE.logs[-1].index, CLIENT_STATE.logs[-1].term, entry, \
-            CLIENT_STATE.commit_index)
-        
+    def run(self):        
         try:
+            entry = []
+            append_entry = AppendEntry("APPEND_ENTRY", CLIENT_STATE.curr_term, CLIENT_STATE.pid, CLIENT_STATE.logs[-1].index, CLIENT_STATE.logs[-1].term, entry, \
+                CLIENT_STATE.commit_index)
             while CLIENT_STATE.curr_state == "LEADER":
                 if time.time() - CLIENT_STATE.leader_heart_beat > self.timeout:
                     CLIENT_STATE.leader_heart_beat = time.time()
@@ -511,19 +519,21 @@ class Timer(Thread):
                 
                 
     def start_election(self):
-        CLIENT_STATE.curr_state = "CANDIDATE"
-        CLIENT_STATE.curr_leader = CLIENT_STATE.pid
-        CLIENT_STATE.curr_term = CLIENT_STATE.curr_term+1
-        CLIENT_STATE.voted_for = CLIENT_STATE.pid
-        CLIENT_STATE.votes[str(CLIENT_STATE.pid) + "|" + str(CLIENT_STATE.curr_term)]=1
-        
-        for client in CLIENT_STATE.port_mapping:
-            if CLIENT_STATE.active_link[client] == True:
-                req_vote = ReqVote("REQ_VOTE", CLIENT_STATE.pid, CLIENT_STATE.curr_term, CLIENT_STATE.logs[-1].index, CLIENT_STATE.logs[-1].term)
-                print("Requesting Vote for Candidate " + str(CLIENT_STATE.pid) + "|" + " Term: " + str(CLIENT_STATE.curr_term) + " | sent to " + str(client))
-                C2C_CONNECTIONS[CLIENT_STATE.port_mapping[client]].send(pickle.dumps(req_vote))
-                print("Req Sent")
-                
+        try:
+            CLIENT_STATE.curr_state = "CANDIDATE"
+            CLIENT_STATE.curr_leader = CLIENT_STATE.pid
+            CLIENT_STATE.curr_term = CLIENT_STATE.curr_term+1
+            CLIENT_STATE.voted_for = CLIENT_STATE.pid
+            CLIENT_STATE.votes[str(CLIENT_STATE.pid) + "|" + str(CLIENT_STATE.curr_term)]=1
+            
+            for client in CLIENT_STATE.port_mapping:
+                if CLIENT_STATE.active_link[client] == True:
+                    req_vote = ReqVote("REQ_VOTE", CLIENT_STATE.pid, CLIENT_STATE.curr_term, CLIENT_STATE.logs[-1].index, CLIENT_STATE.logs[-1].term)
+                    print("Requesting Vote for Candidate " + str(CLIENT_STATE.pid) + "|" + " Term: " + str(CLIENT_STATE.curr_term) + " | sent to " + str(client))
+                    C2C_CONNECTIONS[CLIENT_STATE.port_mapping[client]].send(pickle.dumps(req_vote))
+                    print("Req Sent")
+        except:
+            pass
          
                 
 

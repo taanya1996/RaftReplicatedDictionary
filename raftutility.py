@@ -60,6 +60,7 @@ class ClientState:
         self.public_keys = {}
         self.private_key = None
         self.persistCounter = 0
+        
 
 class ClientMessage:
     def __init__(self, req_type, msg):
